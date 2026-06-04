@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>照護用品庫存與借用管理系統</title>
+    <style>
+        /* ==========================================
+           1. 全域樣式與變數設定 (預設白天模式)
+           ========================================== */
+        :root {
+            --bg-main: #f5f5f5;
+            --bg-card: #ffffff;
+            --text-main: #333333;
+            --border-color: #cccccc;
+            --alert-bg: #ffcccc;
+            --alert-text: #b71c1c;
+            --active-bg: #e8f5e9;
+            --active-text: #1b5e20;
+            --btn-bg: #e1e1e1;
+            --btn-text: #333333;
+            --filter-btn-active: #2196F3;
+            --filter-btn-active-text: #ffffff;
+            --status-btn-active: #9C27B0;
+            --status-btn-active-text: #ffffff;
+            --bed-empty: #E8F5E9;
+            --bed-empty-border: #4CAF50;
+            --bed-occupied: #FFEBEE;
+            --bed-occupied-border: #F44336;
+            --overdue-bg: #FFE082; 
+            --overdue-text: #E65100;
+        }
+
+        [data-theme="dark"] {
+            --bg-main: #2b2b2b;
+            --bg-card: #3c3f41;
+            --text-main: #ffffff;
+            --border-color: #555555;
+            --alert-bg: #8b2500;
+            --alert-text: #ffffff;
+            --active-bg: #1b5e20;
+            --active-text: #ffffff;
+            --btn-bg: #4e5254;
+            --btn-text: #ffffff;
+            --filter-btn-active: #2196F3;
+            --filter-btn-active-text: #ffffff;
+            --status-btn-active: #BA68C8;
+            --status-btn-active-text: #ffffff;
+            --bed-empty: #1B5E20;
+            --bed-empty-border: #81C784;
+            --bed-occupied: #b71c1c;
+            --bed-occupied-border: #E57373;
+            --overdue-bg: #E65100;
+            --overdue-text: #ffffff;
+        }
+
+        body {
+            font-family: "Microsoft JhengHei", sans-serif;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            margin: 0;
+            padding: 20px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 20px;
+        }
+
+        h1 { margin: 0; font-size: 26px; }
+
+        .header-right-zone {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 8px;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .live-clock-panel {
+            font-size: 14px;
+            font-weight: bold;
+            color: #555;
+            background: rgba(0,0,0,0.03);
+            padding: 4px 10px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+        [data-theme="dark"] .live-clock-panel { color: #ccc; background: rgba(255,255,255,0.05); }
+
+        button, .btn {
+            font-size: 16px;
+            font-weight: bold;
+            padding: 10px 18px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background-color: var(--btn-bg);
+            color: var(--btn-text);
+            transition: background 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+        .btn-success { background-color: #4CAF50; color: white; }
+        .btn-primary { background-color: #2196F3; color: white; }
+        .btn-orange { background-color: #FF9800; color: white; }
+        .btn-danger { background-color: #f44336; color: white; }
+        .btn-cyan { background-color: #00BCD4; color: white; } 
+
+        .filter-section {
+            background-color: var(--bg-card);
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .filter-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .filter-title { font-weight: bold; font-size: 16px; min-width: 120px; }
+        .filter-btn { padding: 6px 15px; font-size: 15px; border-radius: 20px; background-color: var(--btn-bg); color: var(--btn-text); cursor: pointer; transition: all 0.2s; }
+        .filter-btn.category-active { background-color: var(--filter-btn-active) !important; color: var(--filter-btn-active-text) !important; }
+        .filter-btn.status-active { background-color: var(--status-btn-active) !important; color: var(--status-btn-active-text) !important; }
+
+        /* 分頁標籤 */
+        .tabs { display: flex; border-bottom: 2px solid var(--border-color); margin-bottom: 20px; }
+        .tab-btn { padding: 12px 24px; font-size: 18px; background: none; color: var(--text-main); border-radius: 6px 6px 0 0; cursor: pointer; }
+        .tab-btn.active { background-color: var(--bg-card); border: 2px solid var(--border-color); border-bottom: 2px solid var(--bg-card); margin-bottom: -2px; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* 表單與表格樣式 */
+        .form-panel { background-color: var(--bg-card); border: 2px solid var(--border-color); padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; flex-wrap: wrap; gap: 20px; align-items: center; }
+        .form-panel .form-group { display: flex; flex-direction: column; gap: 5px; width: 100%; box-sizing: border-box;}
+        .form-group label { font-weight: bold; font-size: 15px; }
+        input, select { font-size: 16px; padding: 8px; border: 1px solid var(--border-color); border-radius: 4px; background-color: var(--bg-card); color: var(--text-main); }
+
+        table { width: 100%; border-collapse: collapse; background-color: var(--bg-card); margin-top: 10px; }
+        th, td { border: 1px solid var(--border-color); padding: 12px; text-align: center; font-size: 16px; }
+        th { background-color: var(--btn-bg); font-weight: bold; }
+        
+        .row-alert { background-color: var(--alert-bg) !important; color: var(--alert-text) !important; }
+        .row-disable { opacity: 0.6; background-color: #e0e0e0 !important; color: gray !important; }
+        .row-active { background-color: var(--active-bg) !important; color: var(--active-text) !important; }
+        .row-overdue { background-color: var(--overdue-bg) !important; color: var(--overdue-text) !important; font-weight: bold; } 
+
+        /* 病房佈局樣式 */
+        .summary-box { display: flex; gap: 20px; margin-bottom: 20px; flex-wrap: wrap; }
+        .summary-card { background-color: var(--bg-card); border: 1px solid var(--border-color); padding: 15px 30px; border-radius: 8px; text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .summary-card h3 { margin: 0 0 5px 0; font-size: 14px; color: gray; }
+        .summary-card p { margin: 0; font-size: 28px; font-weight: bold; }
+
+        .ward-container { display: flex; flex-direction: column; gap: 25px; }
+        .ward-block { background-color: var(--bg-card); border: 1px solid var(--border-color); border-radius: 8px; padding: 20px; }
+        .ward-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--border-color); padding-bottom: 8px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px; }
+        .ward-title-wrapper { display: flex; align-items: center; gap: 10px; }
+        .ward-title { font-size: 20px; font-weight: bold; margin: 0; }
+        
+        .ward-status-tag { font-size: 14px; font-weight: bold; padding: 3px 10px; border-radius: 20px; }
+        .tag-has-space { background-color: #E8F5E9; color: #2E7D32; border: 1px solid #A5D6A7; }
+        .tag-full { background-color: #F5F5F5; color: #616161; border: 1px solid #E0E0E0; }
+
+        .beds-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 15px; }
+        
+        .bed-card { padding: 15px; border-radius: 6px; text-align: center; cursor: pointer; transition: transform 0.1s; border-width: 2px; border-style: solid; }
+        .bed-card:hover { transform: scale(1.03); }
+        .bed-card.empty { background-color: var(--bed-empty); border-color: var(--bed-empty-border); }
+        .bed-card.occupied { background-color: var(--bed-occupied); border-color: var(--bed-occupied-border); }
+        .bed-name { font-size: 18px; font-weight: bold; margin-bottom: 5px; }
+        .bed-status-text { font-size: 13px; font-weight: bold; }
+        .patient-name { font-size: 15px; margin-top: 5px; font-weight: bold; text-decoration: underline; }
+        .bed-borrow-list { font-size: 12px; color: #2196F3; font-weight: bold; margin-top: 5px; background: rgba(33,150,243,0.1); padding: 2px; border-radius: 3px; }
+
+        .btn-sm { font-size: 14px; padding: 5px 12px; border-radius: 4px; }
+        .ward-btn-group { display: flex; gap: 8px; }
+
+        .modal { 
+            display: none; 
+            position: fixed !important; 
+            top: 0 !important; 
+            left: 0 !important; 
+            width: 100vw !important; 
+            height: 100vh !important; 
+            background-color: rgba(0,0,0,0.5) !important; 
+            justify-content: center !important; 
+            align-items: center !important; 
+            z-index: 99999 !important; 
+        }
+        .modal-content { 
+            background-color: var(--bg-card); 
+            padding: 25px; 
+            border-radius: 8px; 
+            width: 90%; 
+            max-width: 450px; 
+            max-height: 85vh; 
+            overflow-y: auto; 
+            position: relative; 
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .close-btn { position: absolute; top: 10px; right: 15px; font-size: 24px; cursor: pointer; color: gray; }
+        .close-btn:hover { color: var(--text-main); }
+        .dynamic-hide { display: none; }
+        .input-with-prefix { display: flex; align-items: center; width: 100%; }
+        .input-prefix-sign { font-size: 22px; font-weight: bold; color: #f44336; margin-right: 8px; display: none; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>📋 照護用品庫存與借用管理系統</h1>
+        <div class="header-right-zone">
+            <div class="header-buttons">
+                <button class="btn-danger btn-sm" onclick="clearAllSystemStorage()">⚠️ 重置初始模擬資料</button>
+                <button id="themeToggleBtn" onclick="toggleTheme()">🌙 切換夜晚模式 (黑)</button>
+            </div>
+            <div class="live-clock-panel">
+                <span>🕒 護理資訊動態校正時間：</span>
+                <span id="liveClockText" style="color: #2196F3;">同步中...</span>
+            </div>
+        </div>
+    </header>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('items-tab', this)">📦 用品庫存總表</button>
+        <button class="tab-btn" onclick="switchTab('borrow-tab', this)">🤝 借用與歸還登記</button>
+        <button class="tab-btn" onclick="switchTab('wards-tab', this)">🏥 病房床位動態</button>
+    </div>
+
+    <!-- 用品庫存總表分頁 -->
+    <div id="items-tab" class="tab-content active">
+        <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn-orange" onclick="openAddItemModal()">➕ 新增全新物品</button>
+            <button class="btn-primary" onclick="openRestockModal()">📥 庫存與安全數量調整</button>
+            <button class="btn-cyan" onclick="generatePurchaseOrder()">📋 生成採購明細表</button>
+            <button class="btn-success" onclick="exportItemsToCSV()" style="background-color: #009688;">📊 匯出庫存總表 (.csv)</button>
+            <button onclick="openLogModal()">查看歷史異動日誌</button>
+            <button onclick="toggleItemStatus()">停用 / 啟用用品</button>
+        </div>
+
+        <div class="filter-section">
+            <div class="filter-bar" id="filterBarContainer">
+                <span class="filter-title">🔍 依分類篩選：</span>
+                <button class="filter-btn category-active" onclick="filterByCategory('全部', this)">全部顯示</button>
+                <button class="filter-btn" onclick="filterByCategory('輔具', this)">輔具</button>
+                <button class="filter-btn" onclick="filterByCategory('儀器', this)">儀器</button>
+                <button class="filter-btn" onclick="filterByCategory('消耗品', this)">消耗品</button>
+            </div>
+            <div class="filter-bar" id="statusBarContainer">
+                <span class="filter-title">⚡ 依狀態篩選：</span>
+                <button class="filter-btn status-active" onclick="filterByStatus('全部', this)">全部顯示</button>
+                <button class="filter-btn" onclick="filterByStatus('正常', this)">正常</button>
+                <button class="filter-btn" onclick="filterByStatus('低庫存', this)">低庫存</button>
+                <button class="filter-btn" onclick="filterByStatus('需補貨', this)">需補貨</button>
+                <button class="filter-btn" onclick="filterByStatus('停用', this)">停用</button>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>選擇</th>
+                    <th>用品 ID</th>
+                    <th>用品名稱</th>
+                    <th>分類</th>
+                    <th>目前在庫(可用)</th>
+                    <th>借出中數量</th>
+                    <th>安全數量</th>
+                    <th>目前的狀態</th>
+                </tr>
+            </thead>
+            <tbody id="itemsTableBody"><!-- JS 動態渲染 --></tbody>
+        </table>
+    </div>
+
+    <!-- 借用與歸還登記分頁 -->
+    <div id="borrow-tab" class="tab-content">
+        <div class="form-panel">
+            <div class="form-group" style="width: auto;">
+                <label>1. 選擇用品</label>
+                <select id="borrowItemSelect" style="width: 250px;"><!-- JS 動態項目 --></select>
+            </div>
+            <div class="form-group" style="width: auto;">
+                <label>2. 借用人 (已入住床位病患)</label>
+                <select id="borrowerBedSelect" style="width: 250px;"><!-- JS 動態項目 --></select>
+            </div>
+            <div class="form-group" style="width: auto;">
+                <label>3. 預計歸還日</label>
+                <input type="date" id="expectDateInput" style="width: 150px;">
+            </div>
+            <button class="btn-success" onclick="actionBorrow()" style="margin-top: 20px;">🤝 確定登記借出</button>
+        </div>
+
+        <div style="margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+            <div style="display: flex; gap: 10px;">
+                <button class="btn-primary" onclick="actionReturn()">↩️ 辦理選中項目的歸還</button>
+                <button class="btn-success" onclick="exportBorrowingsToCSV()" style="background-color: #009688;">📊 匯出借用紀錄 (.csv)</button>
+            </div>
+            <div style="background: var(--bg-card); padding: 8px 15px; border-radius: 6px; border: 1px solid var(--border-color); font-weight: bold; display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="overdueOnlyCheckbox" onchange="renderBorrowTable()" style="transform: scale(1.3); cursor: pointer;">
+                <label for="overdueOnlyCheckbox" style="color: var(--overdue-text); cursor: pointer;">⚠️ 只顯示「已逾期未還」物資</label>
+            </div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>選擇</th>
+                    <th>借用單號</th>
+                    <th>物品名稱</th>
+                    <th>借用床位與人</th>
+                    <th>借用日期</th>
+                    <th>預計歸還日</th>
+                    <th>實際歸還日</th>
+                    <th>狀態</th>
+                </tr>
+            </thead>
+            <tbody id="borrowTableBody"><!-- JS 動態渲染 --></tbody>
+        </table>
+    </div>
+
+    <!-- 病房床位動態分頁 -->
+    <div id="wards-tab" class="tab-content">
+        <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: var(--bg-card); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
+            <span style="font-weight: bold; font-size:15px;">🔨 護理長擴編面板：</span>
+            <button class="btn-orange btn-sm" onclick="openAddWardModal()">➕ 建立全新病房</button>
+        </div>
+
+        <div class="summary-box">
+            <div class="summary-card"><h3 style="color: #2196F3;">🏥 總床位數</h3><p id="totalBedsText">0</p></div>
+            <div class="summary-card"><h3 style="color: #F44336;">🔴 已入住床位</h3><p id="occupiedBedsText">0</p></div>
+            <div class="summary-card"><h3 style="color: #4CAF50;">🟢 剩餘空床數</h3><p id="emptyBedsText">0</p></div>
+        </div>
+
+        <div class="ward-container" id="wardContainerBlock"></div>
+    </div>
+
+    <!-- 所有的彈窗元件 -->
+    <div id="purchaseModal" class="modal">
+        <div class="modal-content" style="max-width: 550px;">
+            <span class="close-btn" onclick="closeModal('purchaseModal')">&times;</span>
+            <h3 style="color: #00BCD4; margin-top: 0;">📋 照護物資採購建議清單</h3>
+            <div id="purchaseModalList" style="max-height: 250px; overflow-y: auto; margin-bottom: 15px;"></div>
+            <button class="btn-success" style="width: 100%;" onclick="copyPurchaseText()">一鍵複製清單文字 (發給廠商)</button>
+        </div>
+    </div>
+
+    <div id="addWardModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('addWardModal')">&times;</span>
+            <h3>🚪 新增全新病房房間</h3>
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label>病房號碼 / 名稱</label>
+                <input type="text" id="newWardNameInput" placeholder="例如: 302 病房、VIP專房">
+            </div>
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label>初始病床數量</label>
+                <input type="number" id="newWardBedsCount" value="2" min="1" max="10">
+            </div>
+            <button class="btn-success" style="width: 100%;" onclick="saveNewWard()">確認建立房間</button>
+        </div>
+    </div>
+
+    <div id="bedModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('bedModal')">&times;</span>
+            <h3 id="bedModalTitle">床位異動登記</h3>
+            <div id="bedModalBody"></div>
+        </div>
+    </div>
+
+    <div id="addItemModal" class="modal">
+        <div class="modal-content" style="max-width: 450px;">
+            <span class="close-btn" onclick="closeModal('addItemModal')">&times;</span>
+            <h3>➕ 新增全新用品品項</h3>
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label>物品名稱</label>
+                <input type="text" id="newItemName" placeholder="例如: 氣墊座、防滑墊">
+            </div>
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label>物品分類</label>
+                <select id="newItemCategory" onchange="checkCategorySelection()">
+                    <option value="輔具">輔具</option>
+                    <option value="儀器">儀器</option>
+                    <option value="消耗品">消耗品</option>
+                    <option value="其他">其他...</option>
+                </select>
+            </div>
+            <div class="form-group dynamic-hide" id="customCategoryGroup" style="margin-bottom: 15px;">
+                <label style="color: #FF9800;">✍️ 請輸入自訂分類名稱</label>
+                <input type="text" id="newItemCustomCategory" placeholder="例如: 復健用品、生活物資">
+            </div>
+            <div class="form-group" style="margin-bottom: 15px;">
+                <label>初始在庫數量</label>
+                <input type="number" id="newItemAvailable" value="0" min="0">
+            </div>
+            <div class="form-group" style="margin-bottom: 20px;">
+                <label>安全庫存數量</label>
+                <input type="number" id="newItemSafety" value="2" min="0">
+            </div>
+            <button class="btn-success" style="width: 100%;" onclick="saveNewItem()">確認建立品項</button>
+        </div>
+    </div>
+
+    <div id="logModal" class="modal">
+        <div class="modal-content" style="max-width: 650px;">
+            <span class="close-btn" onclick="closeModal('logModal')">&times;</span>
+            <h3 id="logModalTitle">用品數量變化歷史紀錄</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>異動時間</th>
+                        <th>增減數量</th>
+                        <th>原因分類</th>
+                        <th>詳細備註說明</th>
+                    </tr>
+                </thead>
+                <tbody id="logTableBody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="restockModal" class="modal">
+        <div class="modal-content" style="max-width: 420px;">
+            <span class="close-btn" onclick="closeModal('restockModal')">&times;</span>
+            <h3 id="restockModalTitle">📦 庫存與安全量調整</h3>
+            <div class="form-panel" style="padding: 10px; margin-bottom: 15px; border-style: dashed;">
+                <div class="form-group">
+                    <label>異動原因類型</label>
+                    <select id="restockReasonSelect" onchange="toggleNegativePrefix()">
+                        <option value="補貨">補貨 (進貨)</option>
+                        <option value="報廢">報廢 (受損丟棄)</option>
+                        <option value="調整">調整 (定期盤點校正)</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-top: 5px;">
+                    <label style="color: #2196F3;">🔹 調整可用庫存量</label>
+                    <div class="input-with-prefix">
+                        <span id="minusSignPrefix" class="input-prefix-sign">-</span>
+                        <input type="number" id="restockQtyInput" style="flex: 1;" placeholder="請輸入數量數字">
+                    </div>
+                </div>
+            </div>
+            <div class="form-panel" style="padding: 10px; margin-bottom: 20px; border-style: dashed;">
+                <div class="form-group">
+                    <label style="color: #9C27B0;">🔹 修改安全數量警示水位</label>
+                    <input type="number" id="restockSafetyInput" min="0">
+                </div>
+            </div>
+            <button class="btn-primary" style="width: 100%;" onclick="saveStockAdjustment()">確認提交更新</button>
+        </div>
+    </div>
+
+    <!-- ==========================================
+       6. JavaScript 核心功能邏輯
+       ========================================== -->
+    <script>
+        // 🛠️ 核心修正：將所有過濾與狀態全域變數「一個不少」全部宣告妥當，阻斷錯誤通路
+        let items, borrowings, stock_logs, wards;
+        let currentFilterCategory = "全部";
+        let currentFilterStatus = "全部";
+        let activeRestockItemId = null;
+
+        const DEFAULT_WARD_BED_LIMITS = {
+            "101 急診留觀室": 3,
+            "201 普通外科房 (健保)": 4,
+            "202 普通內科房 (雙人)": 2,
+            "203 普通復健房 (健保)": 3,
+            "205 高級普通單人房": 1,
+            "301 呼吸照護病房 (RCW)": 2,
+            "302 加護病房 (ICU)": 2,
+            "501 產後護理專區": 2,
+            "502 兒童普通病房": 2
+        };
+
+        function saveDataToLocalStorage() {
+            localStorage.setItem('care_system_items', JSON.stringify(items));
+            localStorage.setItem('care_system_borrowings', JSON.stringify(borrowings));
+            localStorage.setItem('care_system_stock_logs', JSON.stringify(stock_logs));
+            localStorage.setItem('care_system_wards', JSON.stringify(wards));
+        }
+
+        function loadDataFromLocalStorage() {
+            let storedItems = localStorage.getItem('care_system_items');
+            let storedBorrowings = localStorage.getItem('care_system_borrowings');
+            let storedLogs = localStorage.getItem('care_system_stock_logs');
+            let storedWards = localStorage.getItem('care_system_wards');
+
+            if (storedItems && storedBorrowings && storedLogs && storedWards && storedWards !== "{}" && storedItems !== "{}") {
+                try {
+                    items = JSON.parse(storedItems);
+                    borrowings = JSON.parse(storedBorrowings);
+                    stock_logs = JSON.parse(storedLogs);
+                    wards = JSON.parse(storedWards);
+                } catch(e) {
+                    initDefaultHospitalData();
+                }
+            } else {
+                initDefaultHospitalData();
+            }
+        }
+
+        function initDefaultHospitalData() {
+            items = {
+                "ITM-001": {name: "輪椅", category: "輔具", available: 3, borrowed: 1, safety: 2, status: "正常"},
+                "ITM-002": {name: "助行器", category: "輔具", available: 3, borrowed: 0, safety: 2, status: "正常"},
+                "ITM-003": {name: "洗澡椅", category: "輔具", available: 5, borrowed: 0, safety: 2, status: "正常"},
+                "ITM-004": {name: "氣墊座", category: "輔具", available: 2, borrowed: 0, safety: 1, status: "正常"},
+                "ITM-005": {name: "便盆椅", category: "輔具", available: 3, borrowed: 0, safety: 2, status: "正常"},
+                "ITM-006": {name: "血壓計", category: "儀器", available: 1, borrowed: 1, safety: 3, status: "低庫存"},
+                "ITM-007": {name: "額溫槍", category: "儀器", available: 4, borrowed: 0, safety: 2, status: "正常"},
+                "ITM-008": {name: "血糖機", category: "儀器", available: 1, borrowed: 0, safety: 2, status: "低庫存"},
+                "ITM-009": {name: "血氧穿戴儀", category: "儀器", available: 6, borrowed: 0, safety: 3, status: "正常"},
+                "ITM-010": {name: "氧氣製造機", category: "儀器", available: 2, borrowed: 0, safety: 2, status: "正常"},
+                "ITM-011": {name: "額溫槍(舊)", category: "儀器", available: 0, borrowed: 0, safety: 1, status: "停用"},
+                "ITM-012": {name: "手套 M", category: "消耗品", available: 18, borrowed: 0, safety: 20, status: "需補貨"},
+                "ITM-013": {name: "醫療口罩", category: "消耗品", available: 150, borrowed: 0, safety: 100, status: "正常"},
+                "ITM-014": {name: "成人尿布 L", category: "消耗品", available: 8, borrowed: 0, safety: 15, status: "低庫存"},
+                "ITM-015": {name: "抽痰管", category: "消耗品", available: 0, borrowed: 0, safety: 30, status: "需補貨"},
+                "ITM-016": {name: "生理食鹽水", category: "消耗品", available: 45, borrowed: 0, safety: 20, status: "正常"}
+            };
+
+            wards = {
+                "101 急診留觀室": [
+                    { bed_no: "A床", patient: "林先生", occupied: true },
+                    { bed_no: "B床", patient: "", occupied: false },
+                    { bed_no: "C床", patient: "", occupied: false }
+                ],
+                "201 普通外科房 (健保)": [
+                    { bed_no: "A床", patient: "張爺爺", occupied: true },
+                    { bed_no: "B床", patient: "劉伯伯", occupied: true },
+                    { bed_no: "C床", patient: "", occupied: false },
+                    { bed_no: "D床", patient: "", occupied: false }
+                ],
+                "202 普通內科房 (雙人)": [
+                    { bed_no: "A床", patient: "王小姐", occupied: true },
+                    { bed_no: "B床", patient: "", occupied: false }
+                ],
+                "203 普通復健房 (健保)": [
+                    { bed_no: "A床", patient: "趙伯伯", occupied: true },
+                    { bed_no: "B床", patient: "", occupied: false },
+                    { bed_no: "C床", patient: "", occupied: false }
+                ],
+                "205 高級普通單人房": [
+                    { bed_no: "特等床", patient: "陳董事長", occupied: true }
+                ],
+                "301 呼吸照護病房 (RCW)": [
+                    { bed_no: "A床", patient: "黃爺爺", occupied: true },
+                    { bed_no: "B床", patient: "", occupied: false }
+                ],
+                "302 加護病房 (ICU)": [
+                    { bed_no: "A床", patient: "施先生", occupied: true },
+                    { bed_no: "B床", patient: "", occupied: false }
+                ],
+                "501 產後護理專區": [
+                    { bed_no: "A床", patient: "江媽媽", occupied: true },
+                    { bed_no: "B床", patient: "寶寶", occupied: true }
+                ],
+                "502 兒童普通病房": [
+                    { bed_no: "A床", patient: "小明", occupied: true },
+                    { bed_no: "B床", patient: "", occupied: false }
+                ]
+            };
+            
+            borrowings = [
+                { borrow_id: "BRW-001", item_id: "ITM-001", borrower: "201 普通外科房 (健保)-A床 (張爺爺)", date: "2026-05-20", expect: "2026-05-25", return_date: "", status: "借出中" },
+                { borrow_id: "BRW-002", item_id: "ITM-006", borrower: "202 普通內科房 (雙人)-A床 (王小姐)", date: "2026-05-28", expect: "2026-06-01", return_date: "", status: "借出中" }
+            ];
+            
+            stock_logs = [];
+            saveDataToLocalStorage();
+        }
+
+        function clearAllSystemStorage() {
+            if (confirm("🚨 確定要將系統回復成最初內建的醫院22張病床與全套庫存資料嗎？")) {
+                localStorage.clear();
+                initDefaultHospitalData();
+                location.reload();
+            }
+        }
+
+        function updateLiveClock() {
+            let clockEl = document.getElementById('liveClockText');
+            if (!clockEl) return;
+            let now = new Date();
+            let yyyy = now.getFullYear();
+            let mm = String(now.getMonth() + 1).padStart(2, '0');
+            let dd = String(now.getDate()).padStart(2, '0');
+            let hh = String(now.getHours()).padStart(2, '0');
+            let min = String(now.getMinutes()).padStart(2, '0');
+            let ss = String(now.getSeconds()).getSeconds ? String(now.getSeconds()).padStart(2, '0') : String(now.getSeconds()).padStart(2, '0');
+            clockEl.innerText = `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+        }
+
+        // 🛠️ 核心升級：徹底分離執行緒，保證就算 LocalStorage 壞掉，表格也會強力渲染
+        window.onload = function() {
+            try {
+                loadDataFromLocalStorage();
+            } catch(e) {
+                console.error("快取讀取異常，切換至備用初始化");
+                initDefaultHospitalData();
+            }
+
+            let tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+            if (document.getElementById('expectDateInput')) {
+                document.getElementById('expectDateInput').value = tomorrow.toISOString().split('T')[0];
+            }
+
+            // 強制刷新全院視窗表格
+            refreshAll();
+
+            // 時鐘獨立啟動
+            try {
+                updateLiveClock();
+                setInterval(updateLiveClock, 1000);
+            } catch(e) {
+                console.error("時鐘子系統異常");
+            }
+        };
+
+        function refreshAll() {
+            renderItemsTable();
+            renderBorrowTable();
+            updateBorrowOptions();
+            updateBorrowerBedSelectOptions(); 
+            renderWardsStructure(); 
+        }
+
+        function updateItemStatus(itemId) {
+            let item = items[itemId]; if (item.status === "停用") return;
+            if (item.available <= 0) item.status = "需補貨";
+            else if (item.available <= item.safety) item.status = "低庫存";
+            else item.status = "正常";
+        }
+
+        function renderItemsTable() {
+            let tbody = document.getElementById('itemsTableBody'); if(!tbody) return;
+            tbody.innerHTML = ''; let hasData = false;
+            for (let id in items) {
+                let item = items[id]; 
+                if (currentFilterCategory !== "全部" && item.category !== currentFilterCategory) continue;
+                if (currentFilterStatus !== "全部" && item.status !== currentFilterStatus) continue;
+                hasData = true; let rowClass = '';
+                if (item.status === '低庫存' || item.status === '需補貨') rowClass = 'row-alert'; else if (item.status === '停用') rowClass = 'row-disable';
+                tbody.innerHTML += `<tr class="${rowClass}"><td><input type="radio" name="itemRadio" value="${id}"></td><td>${id}</td><td><strong>${item.name}</strong></td><td>${item.category}</td><td>${item.available}</td><td>${item.borrowed}</td><td>${item.safety}</td><td>${item.status}</td></tr>`;
+            }
+            if (!hasData) tbody.innerHTML = `<tr><td colspan="8" style="color: gray; font-style: italic; padding: 20px;">找不到符合條件的用品。</td></tr>`;
+        }
+
+        function renderBorrowTable() {
+            let tbody = document.getElementById('borrowTableBody'); if(!tbody) return;
+            tbody.innerHTML = '';
+            let showOverdueOnly = document.getElementById('overdueOnlyCheckbox').checked;
+            let todayStr = "2026-06-04"; let filteredBorrowings = borrowings;
+            if (showOverdueOnly) { filteredBorrowings = borrowings.filter(b => b.status === "借出中" && b.expect < todayStr); }
+            if (filteredBorrowings.length === 0) { tbody.innerHTML = `<tr><td colspan="8" style="color: gray; font-style: italic; padding: 20px;">目前尚無符合過濾條件的借出登記紀錄。</td></tr>`; return; }
+            filteredBorrowings.forEach(b => {
+                let itemName = items[b.item_id] ? items[b.item_id].name : '已刪除物品';
+                let rowClass = ''; let statusBadge = b.status;
+                if (b.status === '借出中') { if (b.expect < todayStr) { rowClass = 'row-overdue'; statusBadge = '⚠️ 已逾期未還'; } else { rowClass = 'row-active'; } }
+                tbody.innerHTML += `<tr class="${rowClass}"><td><input type="radio" name="borrowRadio" value="${b.borrow_id}"></td><td>${b.borrow_id}</td><td>${itemName}</td><td><strong>${b.borrower}</strong></td><td>${b.date}</td><td>${b.expect}</td><td>${b.return_date || '-'}</td><td>${statusBadge}</td></tr>`;
+            });
+        }
+
+        function updateBorrowerBedSelectOptions() {
+            let select = document.getElementById('borrowerBedSelect'); if(!select) return;
+            select.innerHTML = '<option value="">-- 請選擇借用病患 --</option>';
+            let hasOccupied = false;
+            for (let wardName in wards) {
+                wards[wardName].forEach(bed => {
+                    if (bed.occupied) {
+                        hasOccupied = true;
+                        let optionText = `${wardName}-${bed.bed_no} (${bed.patient})`;
+                        select.innerHTML += `<option value="${optionText}">${optionText}</option>`;
+                    }
+                });
+            }
+            if(!hasOccupied) { select.innerHTML = '<option value="">⚠️ 目前全院無人入住</option>'; }
+        }
+
+        function updateBorrowOptions() {
+            let select = document.getElementById('borrowItemSelect'); if(!select) return;
+            select.innerHTML = '<option value="">-- 請選擇用品 --</option>';
+            for (let id in items) {
+                if (items[id].status !== '停用') {
+                    select.innerHTML += `<option value="${id}">${id} | ${items[id].name} (剩${items[id].available})</option>`;
+                }
+            }
+        }
+
+        function renderWardsStructure() {
+            let container = document.getElementById('wardContainerBlock'); if(!container) return;
+            container.innerHTML = '';
+            let totalBeds = 0; let occupiedBeds = 0; let emptyBeds = 0;
+
+            for (let wardName in wards) {
+                let bedsArray = wards[wardName];
+                let currentWardEmptyCount = 0;
+                bedsArray.forEach(b => { if(!b.occupied) currentWardEmptyCount++; });
+
+                let statusTagHTML = currentWardEmptyCount > 0 ? 
+                    `<span class="ward-status-tag tag-has-space">🟢 尚有空位 (剩 ${currentWardEmptyCount} 床)</span>` : 
+                    `<span class="ward-status-tag tag-full">🔴 已滿床</span>`;
+
+                let wardBlock = document.createElement('div'); wardBlock.className = 'ward-block';
+                wardBlock.innerHTML = `
+                    <div class="ward-header">
+                        <div class="ward-title-wrapper">
+                            <div class="ward-title">🚪 ${wardName} (共 ${bedsArray.length} 床)</div>
+                            ${statusTagHTML}
+                        </div>
+                        <div class="ward-btn-group">
+                            <button class="btn-primary btn-sm" onclick="addBedToWard('${wardName}')" style="background-color:#2196F3;">🛏️ 加設 1 床</button>
+                            <button class="btn-danger btn-sm" onclick="removeBedFromWard('${wardName}')" style="background-color:#f44336;">🪓 撤除最新 1 床</button>
+                        </div>
+                    </div>
+                `;
+                
+                let bedsGrid = document.createElement('div'); bedsGrid.className = 'beds-grid';
+                bedsArray.forEach((bed, index) => {
+                    totalBeds++; let bedClass = 'empty'; let statusText = '🟢 空床 (可入住)'; let patientHTML = '';
+
+                    if (bed.occupied) {
+                        occupiedBeds++; bedClass = 'occupied'; statusText = '🔴 已入住';
+                        let bedKey = `${wardName}-${bed.bed_no} (${bed.patient})`;
+                        let activeBorrows = borrowings.filter(b => b.status === "借出中" && b.borrower === bedKey);
+                        let borrowItemsHTML = activeBorrows.length > 0 ? 
+                            `<div class="bed-borrow-list">🎒 已借: ${activeBorrows.map(b => items[b.item_id] ? items[b.item_id].name : '未知').join('、')}</div>` : '';
+                        patientHTML = `<div class="patient-name">👤 患者: ${bed.patient}</div>${borrowItemsHTML}`;
+                    } else { emptyBeds++; }
+
+                    bedsGrid.innerHTML += `<div class="bed-card ${bedClass}" onclick="clickBedAction('${wardName}', ${index})"><div class="bed-name">🛏️ ${bed.bed_no}</div><div class="bed-status-text">${statusText}</div>${patientHTML}</div>`;
+                });
+                wardBlock.appendChild(bedsGrid); container.appendChild(wardBlock);
+            }
+            if(document.getElementById('totalBedsText')) document.getElementById('totalBedsText').innerText = totalBeds;
+            if(document.getElementById('occupiedBedsText')) document.getElementById('occupiedBedsText').innerText = occupiedBeds;
+            if(document.getElementById('emptyBedsText')) document.getElementById('emptyBedsText').innerText = emptyBeds;
+        }
+
+        function clickBedAction(wardName, index) {
+            let bed = wards[wardName][index];
+            let modalTitle = document.getElementById('bedModalTitle');
+            let modalBody = document.getElementById('bedModalBody');
+            modalTitle.innerText = `🏥 ${wardName} - ${bed.bed_no}`;
+            
+            if (bed.occupied) {
+                let bedKey = `${wardName}-${bed.bed_no} (${bed.patient})`;
+                let activeBorrows = borrowings.filter(b => b.borrower === bedKey && b.status === "借出中");
+
+                let emptyBedOptionsHTML = '';
+                for (let wName in wards) {
+                    wards[wName].forEach((bObj, bIdx) => {
+                        if (!bObj.occupied) {
+                            emptyBedOptionsHTML += `<option value="${wName}||${bIdx}">${wName} - ${bObj.bed_no}</option>`;
+                        }
+                    });
+                }
+
+                let transferSectionHTML = '';
+                if (emptyBedOptionsHTML !== '') {
+                    transferSectionHTML = `
+                        <hr style="border:1px dashed var(--border-color); margin: 20px 0;">
+                        <h4 style="margin:0 0 10px 0; color:#2196F3;">🔄 跨病房快捷轉床 / 換床系統</h4>
+                        <div class="form-group" style="margin-bottom:10px;">
+                            <label>請選取目標空床位</label>
+                            <select id="targetTransferSelect" style="width:100%; box-sizing:border-box;">
+                                ${emptyBedOptionsHTML}
+                            </select>
+                        </div>
+                        <button class="btn-primary" style="width:100%; background-color:#FF9800;" onclick="actionTransferBed('${wardName}', ${index})">🔄 確認執行跨院轉床</button>
+                    `;
+                } else {
+                    transferSectionHTML = `<p style="color:gray; font-size:13px; text-align:center;">💡 提示：目前全院已達 100% 滿床，無法辦理轉床。</p>`;
+                }
+
+                modalBody.innerHTML = `
+                    <p style="font-size:16px;">目前入住患者：<strong style="color:red; font-size:18px;">${bed.patient}</strong></p>
+                    <div style="display:flex; gap:10px; margin-top:15px;">
+                        <button class="btn-danger" style="width:100%;" onclick="actionCheckOutFromModal('${wardName}', ${index}, ${activeBorrows.length})">↩️ 辦理退房出院</button>
+                    </div>
+                    ${transferSectionHTML}
+                `;
+            } else {
+                modalBody.innerHTML = `
+                    <div class="form-group" style="margin-bottom:15px;"><label>入住患者姓名</label><input type="text" id="newPatientNameInput" placeholder="請輸入姓名"></div>
+                    <button class="btn-success" style="width:100%; margin-top:10px;" onclick="checkInBed('${wardName}', ${index})">🟢 登記確認入住</button>
+                `;
+            }
+            document.getElementById('bedModal').style.display = 'flex';
+        }
+
+        function actionCheckOutFromModal(wardName, index, borrowCount) {
+            if (borrowCount > 0) {
+                alert("❌ 系統攔截：無法出院！\n\n該病患身上尚有機構輔具物資借出未歸還，請先前往登記分頁歸還後才能出院！");
+                return;
+            }
+            checkOutBed(wardName, index);
+        }
+
+        function actionTransferBed(sourceWard, sourceIndex) {
+            let selectEl = document.getElementById('targetTransferSelect'); if (!selectEl) return;
+            let val = selectEl.value; if (!val) { alert("請選取一個合法的目標空床！"); return; }
+
+            let parts = val.split("||");
+            let targetWard = parts[0];
+            let targetIndex = parseInt(parts[1]);
+
+            let sourceBed = wards[sourceWard][sourceIndex];
+            let targetBed = wards[targetWard][targetIndex];
+
+            let patientName = sourceBed.patient;
+            let oldBedKey = `${sourceWard}-${sourceBed.bed_no} (${patientName})`;
+            let newBedKey = `${targetWard}-${targetBed.bed_no} (${patientName})`;
+
+            targetBed.occupied = true; targetBed.patient = patientName;
+            sourceBed.occupied = false; sourceBed.patient = "";
+
+            borrowings.forEach(b => {
+                if (b.status === "借出中" && b.borrower === oldBedKey) { b.borrower = newBedKey; }
+            });
+
+            saveDataToLocalStorage(); closeModal('bedModal'); refreshAll();
+            alert(`🎉 轉床成功！\n\n病患【${patientName}】已順利移置至【${targetWard} - ${targetBed.bed_no}】！`);
+        }
+
+        function checkInBed(wardName, index) {
+            let pName = document.getElementById('newPatientNameInput').value.trim(); if (!pName) return;
+            wards[wardName][index].occupied = true; wards[wardName][index].patient = pName; saveDataToLocalStorage(); closeModal('bedModal'); refreshAll();
+        }
+
+        function checkOutBed(wardName, index) {
+            wards[wardName][index].occupied = false; wards[wardName][index].patient = ""; saveDataToLocalStorage(); closeModal('bedModal'); refreshAll();
+        }
+
+        function actionBorrow() {
+            let itemId = document.getElementById('borrowItemSelect').value;
+            let borrowerBedKey = document.getElementById('borrowerBedSelect').value;
+            let expectDate = document.getElementById('expectDateInput').value;
+            if (!itemId || !borrowerBedKey || !expectDate) { alert('提示：請填妥借用資訊！'); return; }
+            let item = items[itemId]; if (item.available <= 0) { alert('錯誤：該物品目前已無庫存！'); return; }
+            item.available--; item.borrowed++; updateItemStatus(itemId);
+            let newId = `BRW-${String(borrowings.length + 1).padStart(3, '0')}`;
+            borrowings.push({ borrow_id: newId, item_id: itemId, borrower: borrowerBedKey, date: new Date().toISOString().split('T')[0], expect: expectDate, return_date: "", status: "借出中" });
+            stock_logs.push({ item_id: itemId, date: getFormatedTextDate(), change: -1, reason: "借出", remark: `借給 【${borrowerBedKey}】` });
+            saveDataToLocalStorage(); refreshAll();
+            alert(`成功：【${item.name}】已成功借出！`);
+        }
+
+        function actionReturn() {
+            let selectedBorrowId = document.getElementById('borrowTableBody').querySelector('input[type="radio"]:checked')?.value; if (!selectedBorrowId) { alert('提示：請先選取紀錄。'); return; }
+            let b = borrowings.find(record => record.borrow_id === selectedBorrowId); if (!b || b.status === "已歸還") return;
+            b.return_date = new Date().toISOString().split('T')[0]; b.status = "已歸還"; let item = items[b.item_id]; item.available++; item.borrowed--; updateItemStatus(b.item_id);
+            stock_logs.push({ item_id: b.item_id, date: getFormatedTextDate(), change: 1, reason: "歸還", remark: `物品退還入庫` });
+            saveDataToLocalStorage(); refreshAll();
+        }
+
+        function saveNewItem() {
+            let name = document.getElementById('newItemName').value.trim(); 
+            let selectCategory = document.getElementById('newItemCategory').value; 
+            let customCategory = document.getElementById('newItemCustomCategory').value.trim(); 
+            let available = parseInt(document.getElementById('newItemAvailable').value); 
+            let safety = parseInt(document.getElementById('newItemSafety').value); 
+            let finalCategory = selectCategory === "其他" ? customCategory : selectCategory;
+            
+            if (!name) { alert('提示：請輸入物品名稱！'); return; }
+            if (selectCategory === "其他" && !customCategory) { alert('提示：請輸入自訂分類！'); return; }
+            if (isNaN(available) || available < 0 || isNaN(safety) || safety < 0) { alert('提示：請輸入有效數字！'); return; }
+            
+            for (let id in items) { if (items[id].name.trim() === name) { alert(`❌ 建立失敗！【${name}】已存在。`); return; } }
+
+            let existingIds = Object.keys(items).map(id => parseInt(id.replace('ITM-', ''))); 
+            let maxIdNum = existingIds.length > 0 ? Math.max(...existingIds) : 0; 
+            let nextId = `ITM-${String(maxIdNum + 1).padStart(3, '0')}`;
+            
+            items[nextId] = { name: name, category: finalCategory, available: available, borrowed: 0, safety: safety, status: "正常" }; 
+            updateItemStatus(nextId); stock_logs.push({ item_id: nextId, date: getFormatedTextDate(), change: available, reason: "補貨", remark: `全新建檔資產入庫` }); 
+            saveDataToLocalStorage(); closeModal('addItemModal'); refreshAll(); 
+            alert(`成功：資產物資【${name}】已成功加入系統！`);
+        }
+
+        function addBedToWard(wardName) {
+            let currentBeds = wards[wardName];
+            let maxBedsAllowed = wardName.includes("單人房") ? 1 : (wardName.includes("雙人") ? 2 : ((wardName.includes("急診") || wardName.includes("ICU")) ? 6 : 4));
+            if (currentBeds.length >= maxBedsAllowed) { alert(`❌ 加床失敗！【${wardName}】硬體規範上限為 ${maxBedsAllowed} 張病床！`); return; }
+            let nextBedLetter = String.fromCharCode(65 + currentBeds.length);
+            currentBeds.push({ bed_no: `${nextBedLetter}床`, patient: "", occupied: false }); saveDataToLocalStorage(); refreshAll();
+        }
+
+        function removeBedFromWard(wardName) {
+            let currentBeds = wards[wardName]; let minLimit = DEFAULT_WARD_BED_LIMITS[wardName] || 2; 
+            if (currentBeds.length <= minLimit) { alert(`❌ 撤床失敗！【${wardName}】已達基本正規配置床位底線！`); return; }
+            let lastBed = currentBeds[currentBeds.length - 1];
+            if (lastBed.occupied) { alert(`❌ 撤床失敗！準備撤除的【${lastBed.bed_no}】目前正有患者【${lastBed.patient}】入住中！`); return; }
+            currentBeds.pop(); saveDataToLocalStorage(); refreshAll();
+        }
+
+        function generatePurchaseOrder() { 
+            let modalList = document.getElementById('purchaseModalList'); if(!modalList) return;
+            modalList.innerHTML = ''; let purchaseItems = []; 
+            for (let id in items) { 
+                let item = items[id]; 
+                if (item.status === '低庫存' || item.status === '需補貨') { 
+                    let shortage = item.safety - item.available; 
+                    purchaseItems.push({ id: id, name: item.name, available: item.available, safety: item.safety, orderQty: shortage }); 
+                } 
+            } 
+            if (purchaseItems.length === 0) { 
+                modalList.innerHTML = `<p style="color:green; font-weight:bold; text-align:center; padding:15px;">🎉 目前全院物資皆在安全水位以上。</p>`; 
+            } else { 
+                let tableHTML = `<table style="width:100%; border-collapse:collapse; margin-top:5px;"><thead><tr style="background:#00BCD4; color:white;"><th style="padding:8px;">物品名稱</th><th style="padding:8px;">目前庫存</th><th style="padding:8px;">安全庫存</th><th style="padding:8px; background:#4CAF50;">💡 建議採購量</th></tr></thead><tbody>`; 
+                purchaseItems.forEach(pi => { tableHTML += `<tr style="background:var(--bg-card);"><td style="padding:8px; border:1px solid var(--border-color); <strong>${pi.name}</strong></td><td style="padding:8px; border:1px solid var(--border-color);">${pi.available}</td><td style="padding:8px; border:1px solid var(--border-color);">${pi.safety}</td><td style="padding:8px; border:1px solid var(--border-color); color:green; font-weight:bold;">+ ${pi.orderQty}</td></tr>`; }); 
+                tableHTML += `</tbody></table>`; modalList.innerHTML = tableHTML; 
+            } 
+            window.lastGeneratedOrderText = "🏥 照護物資採購申請單\n--------------------------------\n"; 
+            purchaseItems.forEach(pi => { window.lastGeneratedOrderText += `品項: ${pi.name} | ➡️ 建議補貨量: +${pi.orderQty}\n`; }); 
+            document.getElementById('purchaseModal').style.display = 'flex'; 
+        }
+
+        function filterByCategory(category, btnElement) { currentFilterCategory = category; document.querySelectorAll('#filterBarContainer .filter-btn').forEach(btn => btn.classList.remove('category-active')); btnElement.classList.add('category-active'); renderItemsTable(); }
+        function filterByStatus(status, btnElement) { currentFilterStatus = status; document.querySelectorAll('#statusBarContainer .filter-btn').forEach(btn => btn.classList.remove('status-active')); btnElement.classList.add('status-active'); renderItemsTable(); }
+        function openAddItemModal() { document.getElementById('newItemName').value = ''; document.getElementById('newItemCategory').value = '輔具'; document.getElementById('newItemCustomCategory').value = ''; document.getElementById('customCategoryGroup').style.display = "none"; document.getElementById('newItemAvailable').value = '0'; document.getElementById('newItemSafety').value = '2'; document.getElementById('addItemModal').style.display = 'flex'; }
+        function openRestockModal() { activeRestockItemId = getSelectedItemId(); if (!activeRestockItemId) { alert('提示：請先在總表勾選一個想要調整庫存或安全數量的物品項目！'); return; } let selectedItem = items[activeRestockItemId]; document.getElementById('restockModalTitle').innerText = `📦 庫存與安全量調整 - ${selectedItem.name}`; document.getElementById('restockQtyInput').value = ''; document.getElementById('restockSafetyInput').value = selectedItem.safety; document.getElementById('restockReasonSelect').value = '補貨'; toggleNegativePrefix(); document.getElementById('restockModal').style.display = 'flex'; }
+        function saveStockAdjustment() { let qtyInput = document.getElementById('restockQtyInput').value; let safetyInput = document.getElementById('restockSafetyInput').value; let reason = document.getElementById('restockReasonSelect').value; let targetItem = items[activeRestockItemId]; let isChanged = false; if (qtyInput !== "") { let qty = parseInt(qtyInput); if (isNaN(qty) || qty <= 0) return; if (reason === "報廢") qty = -qty; if (targetItem.available + qty < 0) { alert('錯誤：庫存不足以扣除！'); return; } targetItem.available += qty; stock_logs.push({ item_id: activeRestockItemId, date: getFormatedTextDate(), change: qty, reason: reason, remark: `手動辦理${reason}` }); isChanged = true; } if (safetyInput !== "") { let newSafety = parseInt(safetyInput); if (targetItem.safety !== newSafety) { targetItem.safety = newSafety; stock_logs.push({ item_id: activeRestockItemId, date: getFormatedTextDate(), change: 0, reason: "調整", remark: `安全水位改為 ${newSafety}` }); isChanged = true; } } if (isChanged) { updateItemStatus(activeRestockItemId); saveDataToLocalStorage(); closeModal('restockModal'); refreshAll(); } }
+        function openLogModal() { let id = getSelectedItemId(); if (!id) { alert('提示：請先在表格中勾選一項用品項目。'); return; } document.getElementById('logModalTitle').innerText = `【${items[id].name}】數量變化歷史紀錄`; let tbody = document.getElementById('logTableBody'); tbody.innerHTML = ''; let logs = stock_logs.filter(log => log.item_id === id); if (logs.length === 0) tbody.innerHTML = `<tr><td colspan="4" style="color: gray; font-style: italic;">該物品目前尚無歷史紀錄。</td></tr>`; else logs.forEach(log => { let changeText = log.change > 0 ? `+${log.change}` : log.change; tbody.innerHTML += `<tr><td>${log.date}</td><td><strong>${changeText}</strong></td><td>${log.reason}</td><td>${log.remark}</td></tr>`; }); document.getElementById('logModal').style.display = 'flex'; }
+        function toggleItemStatus() { let id = getSelectedItemId(); if (!id) { alert('提示：請先在表格中勾選一項用品項目。'); return; } items[id].status = items[id].status === '停用' ? '正常' : '停用'; if(items[id].status === '正常') updateItemStatus(id); saveDataToLocalStorage(); refreshAll(); }
+        function toggleNegativePrefix() { let reason = document.getElementById('restockReasonSelect').value; let prefix = document.getElementById('minusSignPrefix'); let inputField = document.getElementById('restockQtyInput'); if (reason === "報廢") { prefix.style.display = "block"; inputField.placeholder = "請輸入報廢數量數字"; } else { prefix.style.display = "none"; inputField.placeholder = "請輸入數量數字"; } }
+        function getFormatedTextDate() { let now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`; }
+        function closeModal(modalId) { document.getElementById(modalId).style.display = 'none'; }
+        function switchTab(tabId, btnElement) { document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active')); document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btnElement.classList.add('active'); }
+        function toggleTheme() { let currentTheme = document.documentElement.getAttribute('data-theme'); let btn = document.getElementById('themeToggleBtn'); if (currentTheme === 'dark') { document.documentElement.removeAttribute('data-theme'); btn.innerText = "🌙 切換夜晚模式 (黑)"; } else { document.documentElement.setAttribute('data-theme', 'dark'); btn.innerText = "☀️ 切換白天模式 (白)"; } }
+        function checkCategorySelection() { let selectElement = document.getElementById('newItemCategory'); let customGroup = document.getElementById('customCategoryGroup'); if (selectElement.value === "其他") customGroup.style.display = "flex"; else { customGroup.style.display = "none"; document.getElementById('newItemCustomCategory').value = ''; } }
+        function exportItemsToCSV() { let csvContent = "用品ID,用品名稱,分類,目前在庫(可用),借出中數量,安全數量,目前的狀態\n"; for (let id in items) { let item = items[id]; csvContent += `${id},${item.name},${item.category},${item.available},${item.borrowed},${item.safety},${item.status}\n`; } downloadCSV(csvContent, "全院照護用品庫存總表.csv"); }
+        function exportBorrowingsToCSV() { let csvContent = "借用單號,物品名稱,借用床位病患,借用日期,預計歸還日,實際歸還日,借閱狀態\n"; if(borrowings.length === 0) return; borrowings.forEach(b => { let itemName = items[b.item_id] ? items[b.item_id].name : '已刪除物品'; let returnDate = b.return_date || "未歸還"; csvContent += `${b.borrow_id},${itemName},${b.borrower},${b.date},${b.expect},${returnDate},${b.status}\n`; }); downloadCSV(csvContent, "機構物品借還登記紀錄表.csv"); }
+        function downloadCSV(csvContent, fileName) { let blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); let link = document.createElement("a"); let url = URL.createObjectURL(blob); link.setAttribute("href", url); link.setAttribute("download", fileName); link.style.visibility = 'hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link); }
+    </script>
+</body>
+</html>
