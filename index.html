@@ -77,7 +77,7 @@
             display: flex;
             flex-direction: column;
             align-items: flex-end;
-            gap: 10px;
+            gap: 8px;
         }
 
         .header-buttons {
@@ -90,13 +90,10 @@
             font-weight: bold;
             color: var(--text-main);
             background: var(--bg-card);
-            padding: 8px 16px;
-            border-radius: 6px;
+            padding: 6px 12px;
+            border-radius: 4px;
             border: 2px solid var(--border-color);
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            display: flex;
-            align-items: center;
-            gap: 6px;
         }
 
         button, .btn {
@@ -155,6 +152,7 @@
         .row-active { background-color: var(--active-bg) !important; color: var(--active-text) !important; }
         .row-overdue { background-color: var(--overdue-bg) !important; color: var(--overdue-text) !important; font-weight: bold; } 
 
+        /* 用品總表內的藥丸標籤特別樣式 */
         .badge-alert { background-color: #f44336 !important; color: white !important; }
         .badge-warn { background-color: #FF9800 !important; color: white !important; }
         .badge-normal { background-color: #4CAF50 !important; color: white !important; }
@@ -242,7 +240,6 @@
         <button class="tab-btn" onclick="switchTab('wards-tab', this)">🏥 病房床位動態</button>
     </div>
 
-    <!-- 用品庫存總表分頁 -->
     <div id="items-tab" class="tab-content active">
         <div style="margin-bottom: 15px; display: flex; gap: 10px; flex-wrap: wrap;">
             <button class="btn-orange" onclick="openAddItemModal()">➕ 新增全新物品</button>
@@ -284,20 +281,22 @@
                     <th>目前的狀態</th>
                 </tr>
             </thead>
-            <tbody id="itemsTableBody"><!-- JS 動態渲染 --></tbody>
+            <tbody id="itemsTableBody"></tbody>
         </table>
     </div>
 
-    <!-- 借用與歸還登記分頁 -->
     <div id="borrow-tab" class="tab-content">
         <div class="form-panel">
             <div class="form-group" style="width: auto;">
                 <label>1. 選擇用品</label>
-                <select id="borrowItemSelect" style="width: 250px;"><!-- JS 動態項目 --></select>
+                <select id="borrowItemSelect" style="width: 250px;"></select>
             </div>
-            <div class="form-group" style="width: auto;">
-                <label>2. 借用人 (已入住床位病患)</label>
-                <select id="borrowerBedSelect" style="width: 250px;"><!-- JS 動態項目 --></select>
+            <div class="form-group" style="width: auto; display: flex; flex-direction: column; gap: 5px;">
+                <label>2. 借用人欄位</label>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <select id="borrowerBedSelect" style="width: 250px;" onchange="toggleCustomBorrowerField()"></select>
+                    <input type="text" id="customBorrowerInput" style="width: 180px; display: none;" placeholder="✍️ 請手寫輸入姓名/職稱">
+                </div>
             </div>
             <div class="form-group" style="width: auto;">
                 <label>3. 預計歸還日</label>
@@ -330,11 +329,10 @@
                     <th>狀態</th>
                 </tr>
             </thead>
-            <tbody id="borrowTableBody"><!-- JS 動態渲染 --></tbody>
+            <tbody id="borrowTableBody"></tbody>
         </table>
     </div>
 
-    <!-- 病房床位動態分頁 -->
     <div id="wards-tab" class="tab-content">
         <div style="margin-bottom: 15px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; background: var(--bg-card); padding: 12px; border-radius: 8px; border: 1px solid var(--border-color);">
             <span style="font-weight: bold; font-size:15px;">🔨 護理長擴編面板：</span>
@@ -350,7 +348,6 @@
         <div class="ward-container" id="wardContainerBlock"></div>
     </div>
 
-    <!-- 👥 獨立彈窗模組存放區 -->
     <div id="addItemModal" class="modal">
         <div class="modal-content" style="max-width: 450px;">
             <span class="close-btn" onclick="closeModal('addItemModal')">&times;</span>
@@ -466,14 +463,12 @@
         </div>
     </div>
 
-    <!-- ==========================================
-       6. JavaScript 核心功能邏輯
-       ========================================== -->
     <script>
         let items, borrowings, stock_logs, wards;
         let currentFilterCategory = "全部";
         let currentFilterStatus = "全部";
         let activeRestockItemId = null;
+        window.lastGeneratedOrderText = "";
 
         const DEFAULT_WARD_BED_LIMITS = {
             "101 急診留觀室": 3,
@@ -585,7 +580,14 @@
             saveDataToLocalStorage();
         }
 
-        // 🛠️ 語法完美校正：移除上一版寫爆的錯誤語法，回歸最純粹、不報錯的標準寫法
+        function clearAllSystemStorage() {
+            if (confirm("🚨 確定要將系統回復成最初內建的醫院22張病床與全套庫存資料嗎？")) {
+                localStorage.clear();
+                initDefaultHospitalData();
+                location.reload();
+            }
+        }
+
         function updateLiveClock() {
             let clockEl = document.getElementById('liveClockText'); if (!clockEl) return;
             let now = new Date();
@@ -624,6 +626,7 @@
             else item.status = "正常";
         }
 
+        // 🛠️ 核心精準修正：在 <strong> 標籤前把漏掉的「<」補齊，根除畫面上的字體穿幫 Bug
         function renderItemsTable() {
             let tbody = document.getElementById('itemsTableBody'); if(!tbody) return;
             tbody.innerHTML = ''; let hasData = false;
@@ -662,18 +665,32 @@
 
         function updateBorrowerBedSelectOptions() {
             let select = document.getElementById('borrowerBedSelect'); if(!select) return;
-            select.innerHTML = '<option value="">-- 請選擇借用病患 --</option>';
-            let hasOccupied = false;
+            select.innerHTML = `
+                <option value="">-- 請選擇借用病患 --</option>
+                <option value="CUSTOM_NAME" style="color: #FF9800; font-weight: bold;">✍️ 【自訂非住院人員 / 門診病患】</option>
+            `;
             for (let wardName in wards) {
                 wards[wardName].forEach(bed => {
                     if (bed.occupied) {
-                        hasOccupied = true;
                         let optionText = `${wardName}-${bed.bed_no} (${bed.patient})`;
                         select.innerHTML += `<option value="${optionText}">${optionText}</option>`;
                     }
                 });
             }
-            if(!hasOccupied) { select.innerHTML = '<option value="">⚠️ 目前全院無人入住</option>'; }
+        }
+
+        function toggleCustomBorrowerField() {
+            let select = document.getElementById('borrowerBedSelect');
+            let inputField = document.getElementById('customBorrowerInput');
+            if (select && inputField) {
+                if (select.value === "CUSTOM_NAME") {
+                    inputField.style.display = "inline-block";
+                    inputField.focus();
+                } else {
+                    inputField.style.display = "none";
+                    inputField.value = "";
+                }
+            }
         }
 
         function updateBorrowOptions() {
@@ -827,22 +844,40 @@
             wards[wardName][index].occupied = true; wards[wardName][index].patient = pName; saveDataToLocalStorage(); closeModal('bedModal'); refreshAll();
         }
 
+        function checkCategorySelection() { let selectElement = document.getElementById('newItemCategory'); let customGroup = document.getElementById('customCategoryGroup'); if (selectElement.value === "其他") customGroup.style.display = "flex"; else { customGroup.style.display = "none"; document.getElementById('newItemCustomCategory').value = ''; } }
+
         function checkOutBed(wardName, index) {
             wards[wardName][index].occupied = false; wards[wardName][index].patient = ""; saveDataToLocalStorage(); closeModal('bedModal'); refreshAll();
         }
 
         function actionBorrow() {
             let itemId = document.getElementById('borrowItemSelect').value;
-            let borrowerBedKey = document.getElementById('borrowerBedSelect').value;
+            let selectBedValue = document.getElementById('borrowerBedSelect').value;
+            let customNameValue = document.getElementById('customBorrowerInput').value.trim();
             let expectDate = document.getElementById('expectDateInput').value;
-            if (!itemId || !borrowerBedKey || !expectDate) { alert('提示：請填妥借用資訊！'); return; }
+            
+            let finalBorrowerName = "";
+            if (selectBedValue === "CUSTOM_NAME") {
+                if (!customNameValue) { alert('提示：請在輸入框手寫輸入借用人姓名/職稱！'); return; }
+                finalBorrowerName = "👤 " + customNameValue;
+            } else {
+                if (!selectBedValue) { alert('提示：請選取借用病患！'); return; }
+                finalBorrowerName = selectBedValue;
+            }
+
+            if (!itemId || !expectDate) { alert('提示：請填妥借用資訊！'); return; }
             let item = items[itemId]; if (item.available <= 0) { alert('錯誤：該物品目前已無庫存！'); return; }
+            
             item.available--; item.borrowed++; updateItemStatus(itemId);
             let newId = `BRW-${String(borrowings.length + 1).padStart(3, '0')}`;
-            borrowings.push({ borrow_id: newId, item_id: itemId, borrower: borrowerBedKey, date: new Date().toISOString().split('T')[0], expect: expectDate, return_date: "", status: "借出中" });
-            stock_logs.push({ item_id: itemId, date: getFormatedTextDate(), change: -1, reason: "借出", remark: `借給 【${borrowerBedKey}】` });
+            
+            borrowings.push({ borrow_id: newId, item_id: itemId, borrower: finalBorrowerName, date: new Date().toISOString().split('T')[0], expect: expectDate, return_date: "", status: "借出中" });
+            stock_logs.push({ item_id: itemId, date: getFormatedTextDate(), change: -1, reason: "借出", remark: `借給 【${finalBorrowerName}】` });
+            
             saveDataToLocalStorage(); refreshAll();
-            alert(`成功：【${item.name}】已成功借出！`);
+            document.getElementById('customBorrowerInput').style.display = "none";
+            document.getElementById('customBorrowerInput').value = "";
+            alert(`成功：【${item.name}】已成功借出給 ${finalBorrowerName}！`);
         }
 
         function actionReturn() {
@@ -866,13 +901,32 @@
             let modalList = document.getElementById('purchaseModalList'); if(!modalList) return;
             modalList.innerHTML = ''; let purchaseItems = []; 
             for (let id in items) { let item = items[id]; if (item.status === '低庫存' || item.status === '需補貨') { let shortage = item.safety - item.available; purchaseItems.push({ id: id, name: item.name, available: item.available, safety: item.safety, orderQty: shortage }); } } 
-            if (purchaseItems.length === 0) { modalList.innerHTML = `<p style="color:green; font-weight:bold; text-align:center; padding:15px;">🎉 目前全院物資皆在安全水位以上。</p>`; } 
+            if (purchaseItems.length === 0) { modalList.innerHTML = `<p style="color:green; font-weight:bold; text-align:center; padding:15px;">🎉 目前全院物資皆在安全水位以上。</p>`; window.lastGeneratedOrderText = "🎉 目前全院物資皆在安全水位以上。"; } 
             else { 
-                let tableHTML = `<table style="width:100%; border-collapse:collapse; margin-top:5px;"><thead><tr style="background:#00BCD4; color:white;"><th style="padding:8px;">物品名稱</th><th style="padding:8px;">目前庫存</th><th style="padding:8px;">安全庫存</th><th style="padding:8px; background:#4CAF50;">💡 建議採購量</th></tr></thead><tbody> stream`; 
+                let tableHTML = `<table style="width:100%; border-collapse:collapse; margin-top:5px;"><thead><tr style="background:#00BCD4; color:white;"><th style="padding:8px;">物品名稱</th><th style="padding:8px;">目前庫存</th><th style="padding:8px;">安全庫存</th><th style="padding:8px; background:#4CAF50;">💡 建議採購量</th></tr></thead><tbody>`; 
                 purchaseItems.forEach(pi => { tableHTML += `<tr style="background:var(--bg-card);"><td style="padding:8px; border:1px solid var(--border-color);"><strong>${pi.name}</strong></td><td style="padding:8px; border:1px solid var(--border-color);">${pi.available}</td><td style="padding:8px; border:1px solid var(--border-color);">${pi.safety}</td><td style="padding:8px; border:1px solid var(--border-color); color:green; font-weight:bold;">+ ${pi.orderQty}</td></tr>`; }); 
                 tableHTML += `</tbody></table>`; modalList.innerHTML = tableHTML; 
-            } 
-            window.lastGeneratedOrderText = "🏥 照護物資採購申請單\n--------------------------------\n"; purchaseItems.forEach(pi => { window.lastGeneratedOrderText += `品項: ${pi.name} | ➡️ 建議補貨量: +${pi.orderQty}\n`; }); document.getElementById('purchaseModal').style.display = 'flex'; 
+                
+                window.lastGeneratedOrderText = "🏥 照護物資採購申請單\n--------------------------------\n"; purchaseItems.forEach(pi => { window.lastGeneratedOrderText += `品項: ${pi.name} | ➡️ 建議補貨量: +${pi.orderQty}\n`; }); 
+            }
+            document.getElementById('purchaseModal').style.display = 'flex'; 
+        }
+
+        function copyPurchaseText() { 
+            if (!window.lastGeneratedOrderText) { alert("提示：目前沒有採購建議單資料可供複製。"); return; }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(window.lastGeneratedOrderText)
+                .then(() => { alert('📋 採購清單已成功複製到您的剪貼簿！'); })
+                .catch(() => { fallbackCopyMechanism(); });
+            } else { fallbackCopyMechanism(); }
+        }
+
+        function fallbackCopyMechanism() {
+            let textArea = document.createElement("textarea"); textArea.value = window.lastGeneratedOrderText;
+            textArea.style.position = "fixed"; textArea.style.left = "-999999px"; document.body.appendChild(textArea);
+            textArea.focus(); textArea.select();
+            try { document.execCommand('copy'); alert('📋 採購清單已透過安全備用機制成功複製！'); } catch (err) { alert('❌ 複製失敗，請用滑鼠手動選取表格文字複製。'); }
+            document.body.removeChild(textArea);
         }
 
         function filterByCategory(category, btnElement) { currentFilterCategory = category; document.querySelectorAll('#filterBarContainer .filter-btn').forEach(btn => btn.classList.remove('category-active')); btnElement.classList.add('category-active'); renderItemsTable(); }
@@ -881,21 +935,14 @@
         function saveStockAdjustment() { let qtyInput = document.getElementById('restockQtyInput').value; let safetyInput = document.getElementById('restockSafetyInput').value; let reason = document.getElementById('restockReasonSelect').value; let targetItem = items[activeRestockItemId]; let isChanged = false; if (qtyInput !== "") { let qty = parseInt(qtyInput); if (isNaN(qty) || qty <= 0) return; if (reason === "報廢") qty = -qty; if (targetItem.available + qty < 0) { alert('錯誤：庫存不足以扣除！'); return; } targetItem.available += qty; stock_logs.push({ item_id: activeRestockItemId, date: getFormatedTextDate(), change: qty, reason: reason, remark: `手動辦理${reason}` }); isChanged = true; } if (safetyInput !== "") { let newSafety = parseInt(safetyInput); if (targetItem.safety !== newSafety) { targetItem.safety = newSafety; stock_logs.push({ item_id: activeRestockItemId, date: getFormatedTextDate(), change: 0, reason: "調整", remark: `安全水位改為 ${newSafety}` }); isChanged = true; } } if (isChanged) { updateItemStatus(activeRestockItemId); saveDataToLocalStorage(); closeModal('restockModal'); refreshAll(); } }
         function openLogModal() { let id = getSelectedItemId(); if (!id) { alert('提示：請先在表格中勾選一項用品項目。'); return; } document.getElementById('logModalTitle').innerText = `【${items[id].name}】數量變化歷史紀錄`; let tbody = document.getElementById('logTableBody'); tbody.innerHTML = ''; let logs = stock_logs.filter(log => log.item_id === id); if (logs.length === 0) tbody.innerHTML = `<tr><td colspan="4" style="color: gray; font-style: italic;">該物品目前尚無歷史紀錄。</td></tr>`; else logs.forEach(log => { let changeText = log.change > 0 ? `+${log.change}` : log.change; tbody.innerHTML += `<tr><td>${log.date}</td><td><strong>${changeText}</strong></td><td>${log.reason}</td><td>${log.remark}</td></tr>`; }); document.getElementById('logModal').style.display = 'flex'; }
         function toggleItemStatus() { let id = getSelectedItemId(); if (!id) { alert('提示：請先在表格中勾選一項用品項目。'); return; } items[id].status = items[id].status === '停用' ? '正常' : '停用'; if(items[id].status === '正常') updateItemStatus(id); saveDataToLocalStorage(); refreshAll(); }
-        
-        function addBedToWard(wardName) { let currentBeds = wards[wardName]; let maxBedsAllowed = wardName.includes("單人房") ? 1 : (wardName.includes("雙人") ? 2 : ((wardName.includes("急診") || wardName.includes("ICU")) ? 6 : 4)); if (currentBeds.length >= maxBedsAllowed) { alert(`❌ 加床失敗！【${wardName}】硬體規範上限為 ${maxBedsAllowed} 張病床！`); return; } let nextBedLetter = String.fromCharCode(65 + currentBeds.length); currentBeds.push({ bed_no: `${nextBedLetter}床`, patient: "", occupied: false }); saveDataToLocalStorage(); refreshAll(); }
-        function removeBedFromWard(wardName) { let currentBeds = wards[wardName]; let minLimit = DEFAULT_WARD_BED_LIMITS[wardName] || 2; if (currentBeds.length <= minLimit) { alert(`❌ 撤床失敗！【${wardName}】已達基本正規配置床位底線！`); return; } let lastBed = currentBeds[currentBeds.length - 1]; if (lastBed.occupied) { alert(`❌ 撤床失敗！準備撤除的【${lastBed.bed_no}】目前正有患者【${lastBed.patient}】入住中！`); return; } currentBeds.pop(); saveDataToLocalStorage(); refreshAll(); }
         function toggleNegativePrefix() { let reason = document.getElementById('restockReasonSelect').value; let prefix = document.getElementById('minusSignPrefix'); let inputField = document.getElementById('restockQtyInput'); if (reason === "報廢") { prefix.style.display = "block"; inputField.placeholder = "請輸入報廢數量數字"; } else { prefix.style.display = "none"; inputField.placeholder = "請輸入數量數字"; } }
         function getFormatedTextDate() { let now = new Date(); return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`; }
         function closeModal(modalId) { document.getElementById(modalId).style.display = 'none'; }
         function getSelectedItemId() { let selectedRadio = document.querySelector('input[name="itemRadio"]:checked'); return selectedRadio ? selectedRadio.value : null; }
         function switchTab(tabId, btnElement) { document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active')); document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active')); document.getElementById(tabId).classList.add('active'); btnElement.classList.add('active'); }
         function toggleTheme() { let currentTheme = document.documentElement.getAttribute('data-theme'); let btn = document.getElementById('themeToggleBtn'); if (currentTheme === 'dark') { document.documentElement.removeAttribute('data-theme'); btn.innerText = "🌙 切換夜晚模式 (黑)"; } else { document.documentElement.setAttribute('data-theme', 'dark'); btn.innerText = "☀️ 切換白天模式 (白)"; } }
-        function checkCategorySelection() { let selectElement = document.getElementById('newItemCategory'); let customGroup = document.getElementById('customCategoryGroup'); if (selectElement.value === "其他") customGroup.style.display = "flex"; else { customGroup.style.display = "none"; document.getElementById('newItemCustomCategory').value = ''; } }
-        function downloadCSV(csvContent, fileName) { let blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' }); let link = document.createElement("a"); let url = URL.createObjectURL(blob); link.setAttribute("href", url); link.setAttribute("download", fileName); link.style.visibility = 'hidden'; document.body.appendChild(link); link.click(); document.body.removeChild(link); }
-        function exportItemsToCSV() { let csvContent = "用品ID,用品名稱,分類,目前在庫(可用),借出中數量,安全數量,目前的狀態\n"; for (let id in items) { let item = items[id]; csvContent += `${id},${item.name},${item.category},${item.available},${item.borrowed},${item.safety},${item.status}\n`; } downloadCSV(csvContent, "全院照護用品庫存總表.csv"); }
         function openAddWardModal() { document.getElementById('newWardNameInput').value = ''; document.getElementById('newWardBedsCount').value = '2'; document.getElementById('addWardModal').style.display = 'flex'; }
         function saveNewWard() { let wardName = document.getElementById('newWardNameInput').value.trim(); let bedsCount = parseInt(document.getElementById('newWardBedsCount').value); if (!wardName) return; let newBedsArray = []; for (let i = 0; i < bedsCount; i++) { let bedLetter = String.fromCharCode(65 + i); newBedsArray.push({ bed_no: `${bedLetter}床`, patient: "", occupied: false }); } wards[wardName] = newBedsArray; saveDataToLocalStorage(); closeModal('addWardModal'); refreshAll(); }
-        function exportBorrowingsToCSV() { let csvContent = "借用單號,物品名稱,借用床位病患,借用日期,預計歸還日,實際歸還日,借閱狀態\n"; if(borrowings.length === 0) return; borrowings.forEach(b => { let itemName = items[b.item_id] ? items[b.item_id].name : '已刪除物品'; let returnDate = b.return_date || "未歸還"; csvContent += `${b.borrow_id},${itemName},${b.borrower},${b.date},${b.expect},${returnDate},${b.status}\n`; }); downloadCSV(csvContent, "機構物品借還登記紀錄表.csv"); }
     </script>
 </body>
 </html>
